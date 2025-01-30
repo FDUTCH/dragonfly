@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"github.com/df-mc/dragonfly/server/entity/effect"
 	"github.com/df-mc/dragonfly/server/world"
-	"golang.org/x/exp/maps"
+	"maps"
 	"reflect"
+	"slices"
 )
 
 // EffectManager manages the effects of an entity. The effect manager will only store effects that last for
@@ -36,7 +37,7 @@ func (m *EffectManager) Add(e effect.Effect, entity Living) effect.Effect {
 	}
 	t, ok := e.Type().(effect.LastingType)
 	if !ok {
-		e.Type().Apply(entity, lvl, 0)
+		e.Type().Apply(entity, e)
 		return e
 	}
 	typ := reflect.TypeOf(e.Type())
@@ -77,7 +78,7 @@ func (m *EffectManager) Effect(e effect.Type) (effect.Effect, bool) {
 // Effects returns a list of all effects currently present in the effect manager. This will never include
 // effects that have expired.
 func (m *EffectManager) Effects() []effect.Effect {
-	return maps.Values(m.effects)
+	return slices.Collect(maps.Values(m.effects))
 }
 
 // Tick ticks the EffectManager, applying all of its effects to the Living entity passed when applicable and
@@ -97,9 +98,8 @@ func (m *EffectManager) Tick(entity Living, tx *world.Tx) {
 			update = true
 			continue
 		}
-		eff = eff.TickDuration()
-		eff.Type().Apply(entity, eff.Level(), eff.Duration())
-		m.effects[i] = eff
+		eff.Type().Apply(entity, eff)
+		m.effects[i] = eff.TickDuration()
 	}
 
 	if update {

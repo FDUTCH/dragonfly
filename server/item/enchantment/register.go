@@ -38,7 +38,7 @@ func init() {
 	// TODO: (32) Channeling.
 	// TODO: (33) Multishot.
 	// TODO: (34) Piercing.
-	// TODO: (35) Quick Charge.
+	item.RegisterEnchantment(IDQuickCharge, QuickCharge)
 	item.RegisterEnchantment(IDSoulSpeed, SoulSpeed)
 	item.RegisterEnchantment(IDSwiftSneak, SwiftSneak)
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/df-mc/dragonfly/server/internal/sliceutil"
 	_ "github.com/df-mc/dragonfly/server/item" // Imported for maintaining correct initialisation order.
 	"github.com/df-mc/dragonfly/server/player"
+	"github.com/df-mc/dragonfly/server/player/chat"
 	"github.com/df-mc/dragonfly/server/player/skin"
 	"github.com/df-mc/dragonfly/server/session"
 	"github.com/df-mc/dragonfly/server/world"
@@ -22,15 +23,15 @@ import (
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/login"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
-	"github.com/sandertv/gophertunnel/minecraft/text"
-	"golang.org/x/exp/maps"
 	"golang.org/x/text/language"
 	"iter"
+	"maps"
 	"os"
 	"os/exec"
 	"os/signal"
 	"runtime"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -183,6 +184,13 @@ func (srv *Server) MaxPlayerCount() int {
 	return srv.conf.MaxPlayers
 }
 
+// PlayerCount returns the total number of players connected to the Server.
+func (srv *Server) PlayerCount() int {
+	srv.pmu.RLock()
+	defer srv.pmu.RUnlock()
+	return len(srv.p)
+}
+
 // Players returns an iterator that yields players currently online. If Players
 // is called from within a transaction, the respective transaction should be
 // passed. Passing nil is otherwise valid. Players returned are only valid
@@ -245,7 +253,7 @@ func (srv *Server) Player(uuid uuid.UUID) (*world.EntityHandle, bool) {
 // found, the entity handle is returned and the bool returned holds a true
 // value. If not, the bool is false and the handle is nil
 func (srv *Server) PlayerByName(name string) (*world.EntityHandle, bool) {
-	if p, ok := sliceutil.SearchValue(maps.Values(srv.p), func(p *onlinePlayer) bool {
+	if p, ok := sliceutil.SearchValue(slices.Collect(maps.Values(srv.p)), func(p *onlinePlayer) bool {
 		return p.name == name
 	}); ok {
 		return p.handle, true
@@ -257,7 +265,7 @@ func (srv *Server) PlayerByName(name string) (*world.EntityHandle, bool) {
 // found, the entity handle is returned and the bool returned is true. If no
 // player with the XUID was found, nil and false are returned.
 func (srv *Server) PlayerByXUID(xuid string) (*world.EntityHandle, bool) {
-	if p, ok := sliceutil.SearchValue(maps.Values(srv.p), func(p *onlinePlayer) bool {
+	if p, ok := sliceutil.SearchValue(slices.Collect(maps.Values(srv.p)), func(p *onlinePlayer) bool {
 		return p.xuid == xuid
 	}); ok {
 		return p.handle, true
@@ -293,7 +301,7 @@ func (srv *Server) close() {
 
 	srv.conf.Log.Debug("Disconnecting players...")
 	for p := range srv.Players(nil) {
-		p.Disconnect(text.Colourf("<yellow>%v</yellow>", srv.conf.ShutdownMessage))
+		p.Disconnect(chat.MessageServerDisconnect.Resolve(p.Locale()))
 	}
 	srv.pwg.Wait()
 
@@ -369,7 +377,7 @@ func (srv *Server) startListening() {
 // registered custom blocks. It allows block components to be created only once
 // at startup.
 func (srv *Server) makeBlockEntries() {
-	custom := maps.Values(world.CustomBlocks())
+	custom := slices.Collect(maps.Values(world.CustomBlocks()))
 	srv.customBlocks = make([]protocol.BlockEntry, len(custom))
 
 	for i, b := range custom {

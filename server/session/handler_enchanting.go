@@ -9,7 +9,9 @@ import (
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
-	"math/rand"
+	"math"
+	"math/rand/v2"
+	"slices"
 )
 
 const (
@@ -117,7 +119,7 @@ func (s *Session) sendEnchantmentOptions(tx *world.Tx, c Controllable, pos cube.
 		// to enchanting tables only. We also only need to set the middle index of Enchantments. The other two serve
 		// an unknown purpose and can cause various unexpected issues.
 		options = append(options, protocol.EnchantmentOption{
-			Name:            enchantNames[rand.Intn(len(enchantNames))],
+			Name:            enchantNames[rand.IntN(len(enchantNames))],
 			Cost:            uint32(selectedCosts[i]),
 			RecipeNetworkID: uint32(i),
 			Enchantments: protocol.ItemEnchantments{
@@ -146,12 +148,13 @@ func (s *Session) determineAvailableEnchantments(tx *world.Tx, c Controllable, p
 
 	// Search for bookshelves around the enchanting table. Bookshelves help boost the value of the enchantments that
 	// are selected, resulting in enchantments that are rarer but also more expensive.
-	random := rand.New(rand.NewSource(c.EnchantmentSeed()))
+	seed := uint64(c.EnchantmentSeed())
+	random := rand.New(rand.NewPCG(seed, seed))
 	bookshelves := searchBookshelves(tx, pos)
 	value := enchantable.EnchantmentValue()
 
 	// Calculate the base cost, used to calculate the upper, middle, and lower level costs.
-	baseCost := random.Intn(8) + 1 + (bookshelves >> 1) + random.Intn(bookshelves+1)
+	baseCost := random.IntN(8) + 1 + (bookshelves >> 1) + random.IntN(bookshelves+1)
 
 	// Calculate the upper, middle, and lower level costs.
 	upperLevelCost := max(baseCost/3, 1)
