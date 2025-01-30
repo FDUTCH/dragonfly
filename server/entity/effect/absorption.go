@@ -13,12 +13,13 @@ type absorption struct {
 	nopLasting
 }
 
-// Start ...
-func (absorption) Start(e world.Entity, lvl int) {
-	if i, ok := e.(interface {
-		SetAbsorption(health float64)
-	}); ok {
-		i.SetAbsorption(4 * float64(lvl))
+func (a absorption) Apply(e world.Entity, eff Effect) {
+	if eff.Tick() == 0 {
+		if i, ok := e.(interface {
+			AddAbsorption(health float64)
+		}); ok {
+			i.AddAbsorption(4 * float64(eff.Level()))
+		}
 	}
 }
 

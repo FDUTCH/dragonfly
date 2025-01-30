@@ -680,6 +680,25 @@ func (p *Player) SetAbsorption(health float64) {
 	p.session().SendHealth(p.Health(), p.MaxHealth(), p.absorptionHealth)
 }
 
+func (p *Player) AddAbsorption(health float64) {
+	ef, has := p.Effect(effect.Absorption)
+
+	result := p.absorptionHealth + health
+
+	if !has {
+		p.absorptionHealth = min(result, 16)
+		p.session().SendHealth(p.Health(), p.MaxHealth(), p.absorptionHealth)
+		return
+	}
+
+	potential := float64(ef.Level()) * 4
+	if result > potential {
+		potential = result
+	}
+	p.absorptionHealth = min(potential, 16)
+	p.session().SendHealth(p.Health(), p.MaxHealth(), p.absorptionHealth)
+}
+
 // Absorption returns the absorption health that the player has.
 func (p *Player) Absorption() float64 {
 	return p.absorptionHealth
