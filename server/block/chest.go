@@ -6,9 +6,11 @@ import (
 	"github.com/df-mc/dragonfly/server/internal/nbtconv"
 	"github.com/df-mc/dragonfly/server/item"
 	"github.com/df-mc/dragonfly/server/item/inventory"
+	"github.com/df-mc/dragonfly/server/loot"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/df-mc/dragonfly/server/world/sound"
 	"github.com/go-gl/mathgl/mgl64"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +34,9 @@ type Chest struct {
 	paired       bool
 	pairX, pairZ int
 	pairInv      *inventory.Inventory
+
+	LootTable     string
+	LootTableSeed int
 
 	inventory *inventory.Inventory
 	viewerMu  *sync.RWMutex
@@ -147,6 +152,15 @@ func (c Chest) RemoveViewer(v ContainerViewer, tx *world.Tx, pos cube.Pos) {
 
 // Activate ...
 func (c Chest) Activate(pos cube.Pos, _ cube.Face, tx *world.Tx, u item.User, _ *item.UseContext) bool {
+
+	if c.LootTable != "" && c.LootTableSeed != 0 {
+		t := loot.NewTable(c.LootTable)
+		err := t.FillInventory(rand.New(rand.NewSource(int64(c.LootTableSeed))), c.inventory)
+		if err != nil {
+			panic(err)
+		}
+		tx.SetBlock(pos, c, nil)
+	}
 	if opener, ok := u.(ContainerOpener); ok {
 		if c.paired {
 			if d, ok := tx.Block(c.pairPos(pos).Side(cube.FaceUp)).(LightDiffuser); !ok || d.LightDiffusionLevel() > 2 {
@@ -301,6 +315,8 @@ func (c Chest) DecodeNBT(data map[string]any) any {
 	c = NewChest()
 	c.Facing = facing
 	c.CustomName = nbtconv.String(data, "CustomName")
+	c.LootTable = nbtconv.String(data, "LootTable")
+	c.LootTableSeed = int(nbtconv.Int32(data, "LootTableSeed"))
 
 	pairX, ok := data["pairx"]
 	pairZ, ok2 := data["pairz"]
@@ -331,6 +347,14 @@ func (c Chest) EncodeNBT() map[string]any {
 	}
 	if c.CustomName != "" {
 		m["CustomName"] = c.CustomName
+	}
+
+	if c.LootTable != "" {
+		m["LootTable"] = c.LootTable
+	}
+
+	if c.LootTableSeed != 0 {
+		m["LootTableSeed"] = int32(c.LootTableSeed)
 	}
 
 	if c.paired {

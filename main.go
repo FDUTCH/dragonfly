@@ -2,8 +2,11 @@ package main
 
 import (
 	"fmt"
+	"github.com/df-mc/dragonfly/commands"
 	"github.com/df-mc/dragonfly/server"
+	"github.com/df-mc/dragonfly/server/cmd"
 	"github.com/df-mc/dragonfly/server/player/chat"
+	"github.com/df-mc/dragonfly/server/world"
 	"github.com/pelletier/go-toml"
 	"log/slog"
 	"os"
@@ -17,12 +20,16 @@ func main() {
 		panic(err)
 	}
 
+	cmd.Register(cmd.New("gamemode", "set gamemode", []string{"gm"}, commands.Gamemode{}))
+
+	cmd.Register(cmd.New("loot", "set loot", nil, commands.Loot{}))
+
 	srv := conf.New()
 	srv.CloseOnProgramEnd()
 
 	srv.Listen()
 	for p := range srv.Accept() {
-		_ = p
+		p.SetGameMode(world.GameModeCreative)
 	}
 }
 
