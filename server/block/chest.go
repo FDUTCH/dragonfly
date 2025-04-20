@@ -152,7 +152,6 @@ func (c Chest) RemoveViewer(v ContainerViewer, tx *world.Tx, pos cube.Pos) {
 
 // Activate ...
 func (c Chest) Activate(pos cube.Pos, _ cube.Face, tx *world.Tx, u item.User, _ *item.UseContext) bool {
-
 	if c.LootTable != "" && c.LootTableSeed != 0 {
 		t := loot.NewTable(c.LootTable)
 		err := t.FillInventory(rand.New(rand.NewSource(int64(c.LootTableSeed))), c.inventory)
