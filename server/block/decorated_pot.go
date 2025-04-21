@@ -6,6 +6,7 @@ import (
 	"github.com/df-mc/dragonfly/server/block/model"
 	"github.com/df-mc/dragonfly/server/internal/nbtconv"
 	"github.com/df-mc/dragonfly/server/item"
+	"github.com/df-mc/dragonfly/server/loot"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/df-mc/dragonfly/server/world/particle"
 	"github.com/df-mc/dragonfly/server/world/sound"
@@ -31,6 +32,8 @@ type DecoratedPot struct {
 	// Decorations are the four decorations displayed on the sides of the pot. If a decoration is a brick or nil,
 	// the side will appear to be empty.
 	Decorations [4]PotDecoration
+
+	LootInfo
 }
 
 // SideClosed ...
@@ -173,6 +176,7 @@ func (p DecoratedPot) EncodeNBT() map[string]any {
 	if !p.Item.Empty() {
 		m["item"] = nbtconv.WriteItem(p.Item, true)
 	}
+	p.WriteLootInfo(m)
 	return m
 }
 
@@ -193,7 +197,19 @@ func (p DecoratedPot) DecodeNBT(data map[string]any) any {
 			p.Decorations[i] = decoration
 		}
 	}
+	p.ReadLootInfo(data)
 	return p
+}
+
+func (p DecoratedPot) fillLoot() (DecoratedPot, bool) {
+	if p.LootTable == "" {
+		return p, false
+	}
+	t := loot.NewTable(p.LootTable)
+	for it := range t.Loot(int64(p.LootTableSeed)) {
+		p.Item = it
+	}
+	return p, true
 }
 
 // allDecoratedPots ...

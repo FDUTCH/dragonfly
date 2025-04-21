@@ -18,24 +18,26 @@ type entry struct {
 	Name      string `json:"name"`
 }
 
+// stacks...
 func (e entry) stacks(r *rand.Rand, seed int64, stack item.Stack, c KillСircumstances) iter.Seq[item.Stack] {
-
 	lootingVal, _ := stack.Enchantment(enchantment.Looting)
 	switch e.Type {
 	case "loot_table":
 		return Loot(e.Name, seed)
 	case "empty":
-		return stump
+		return empty
 	case "item":
 	default:
 		panic(fmt.Errorf("unknown entry type %s", e.Type))
 	}
+
 	it, ok := itemByName(e.Name, 0)
 	if !ok {
-		return stump
+		return empty
 	}
+
 	var (
-		data         int16
+		meta         int16
 		enchantments []item.Enchantment
 		damage       float64
 		minCount     int
@@ -54,7 +56,7 @@ func (e entry) stacks(r *rand.Rand, seed int64, stack item.Stack, c KillСircums
 				minCount = count(r, function["count"])
 			}
 		case "set_data":
-			data = nbtconv.Int16(function, "data")
+			meta = nbtconv.Int16(function, "data")
 		case "set_damage":
 			if nbtconv.Bool(function, "add") {
 				damage += itemDamage(r, function)
@@ -62,35 +64,35 @@ func (e entry) stacks(r *rand.Rand, seed int64, stack item.Stack, c KillСircums
 				damage = itemDamage(r, function)
 			}
 		case "enchant_randomly":
-			i, _ := itemByName(e.Name, data)
+			i, _ := itemByName(e.Name, meta)
 			enchantments = append(enchantments, enchantRandomly(r, i, nbtconv.Bool(function, "treasure"))...)
 		case "enchant_with_levels":
-			i, _ := itemByName(e.Name, data)
+			i, _ := itemByName(e.Name, meta)
 			enchantments = append(enchantments, enchantLevel(r, i, nbtconv.Bool(function, "treasure"), count(r, function["levels"]))...)
 		case "specific_enchants":
 			enchantments = append(enchantments, enchants(r, function)...)
 		case "looting_enchant":
 			minCount += r.Intn(lootingVal.Level() + 1)
 		case "furnace_smelt":
-			e.Name, data = furnaceSmelt(it, c).EncodeItem()
+			e.Name, meta = furnaceSmelt(it, c).EncodeItem()
 		case "enchant_random_gear":
 			chance := function["chance"].(float64)
 			if useChance(chance, r) {
-				i, _ := itemByName(e.Name, data)
+				i, _ := itemByName(e.Name, meta)
 				enchantments = append(enchantments, enchantRandomly(r, i, nbtconv.Bool(function, "treasure"))...)
 			}
 		case "set_potion":
-			data = int16(potionId(function).Uint8())
+			meta = int16(potionId(function).Uint8())
 		case "random_aux_value":
-			data = int16(count(r, function["values"]))
+			meta = int16(count(r, function["values"]))
 		case "set_stew_effect":
-			data = int16(stewEffect(r, function))
+			meta = int16(stewEffect(r, function))
 		case "set_lore":
 			stackLore = lore(function)
 		case "set_name":
 			customName = nbtconv.String(function, "name")
 		case "exploration_map", "random_block_state", "random_dye", "set_actor_id", "set_book_contents", "set_data_from_color_index", "fill_container", "trader_material_type":
-			//
+			// can not be implemented currently.
 		}
 	}
 
@@ -98,9 +100,9 @@ func (e entry) stacks(r *rand.Rand, seed int64, stack item.Stack, c KillСircums
 		minCount = 1
 	}
 
-	it, ok = itemByName(e.Name, data)
+	it, ok = itemByName(e.Name, meta)
 	if !ok {
-		return stump
+		return empty
 	}
 	result := item.NewStack(it, minCount)
 
@@ -112,4 +114,5 @@ func (e entry) stacks(r *rand.Rand, seed int64, stack item.Stack, c KillСircums
 	}
 }
 
-func stump(yield func(stack item.Stack) bool) {}
+// empty...
+func empty(yield func(stack item.Stack) bool) {}

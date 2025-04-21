@@ -14,7 +14,6 @@ type Table struct {
 
 // Loot returns an iterator that yields loot items.
 func (t Table) Loot(seed int64) iter.Seq[item.Stack] {
-
 	return func(yield func(item.Stack) bool) {
 		r := rand.New(rand.NewSource(seed))
 
@@ -29,17 +28,10 @@ func (t Table) Loot(seed int64) iter.Seq[item.Stack] {
 			}
 		}
 	}
-
 }
 
 // FillInventory fills inventories, ensures inventory is filled without overlapping up to 100 slots.
 func (t Table) FillInventory(r *rand.Rand, i *inventory.Inventory) (err error) {
-	//defer func() {
-	//	if e := recover(); e != nil {
-	//		err = e.(error)
-	//	}
-	//}()
-
 	nextSlot := fillAllSlots(i.Size(), r)
 
 	for stack := range t.Loot(r.Int63()) {
@@ -49,7 +41,6 @@ func (t Table) FillInventory(r *rand.Rand, i *inventory.Inventory) (err error) {
 			return err
 		}
 	}
-
 	return
 }
 
@@ -77,5 +68,5 @@ func fillAllSlots(num int, r *rand.Rand) func() int {
 	}
 }
 
-// primes is an array of prime numbers used to generate fill inventory slots wise out overlapping.
+// primes is an array of prime numbers used to generate inventory slots wise out overlapping.
 var primes = [...]int{2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97}

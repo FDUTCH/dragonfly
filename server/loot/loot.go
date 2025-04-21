@@ -112,8 +112,7 @@ func unknownToInteger(val any) int {
 }
 
 func enchants(r *rand.Rand, val map[string]any) (result []item.Enchantment) {
-	enchants := val["enchants"].([]any)
-	for _, ench := range enchants {
+	for _, ench := range val["enchants"].([]any) {
 		m := ench.(map[string]any)
 		id := nbtconv.String(m, "id")
 		level := m["level"].([]any)

@@ -35,8 +35,7 @@ type Chest struct {
 	pairX, pairZ int
 	pairInv      *inventory.Inventory
 
-	LootTable     string
-	LootTableSeed int
+	LootInfo
 
 	inventory *inventory.Inventory
 	viewerMu  *sync.RWMutex
@@ -153,11 +152,6 @@ func (c Chest) RemoveViewer(v ContainerViewer, tx *world.Tx, pos cube.Pos) {
 // Activate ...
 func (c Chest) Activate(pos cube.Pos, _ cube.Face, tx *world.Tx, u item.User, _ *item.UseContext) bool {
 	if c.LootTable != "" && c.LootTableSeed != 0 {
-		t := loot.NewTable(c.LootTable)
-		err := t.FillInventory(rand.New(rand.NewSource(int64(c.LootTableSeed))), c.inventory)
-		if err != nil {
-			panic(err)
-		}
 		tx.SetBlock(pos, c, nil)
 	}
 	if opener, ok := u.(ContainerOpener); ok {
@@ -233,8 +227,19 @@ func (c Chest) Paired() bool {
 func (c Chest) pair(tx *world.Tx, pos, pairPos cube.Pos) (ch, pair Chest, ok bool) {
 	pair, ok = tx.Block(pairPos).(Chest)
 	if !ok || c.Facing != pair.Facing || pair.paired && (pair.pairX != pos[0] || pair.pairZ != pos[2]) {
+		if c.fillLoot() {
+			c.LootTable = ""
+		}
 		return c, pair, false
 	}
+	if c.fillLoot() {
+		c.LootTable = ""
+	}
+
+	if pair.fillLoot() {
+		pair.LootTable = ""
+	}
+
 	m := new(sync.RWMutex)
 	v := make(map[ContainerViewer]struct{})
 	left, right := c.inventory.Clone(nil), pair.inventory.Clone(nil)
@@ -314,8 +319,7 @@ func (c Chest) DecodeNBT(data map[string]any) any {
 	c = NewChest()
 	c.Facing = facing
 	c.CustomName = nbtconv.String(data, "CustomName")
-	c.LootTable = nbtconv.String(data, "LootTable")
-	c.LootTableSeed = int(nbtconv.Int32(data, "LootTableSeed"))
+	c.WriteLootInfo(data)
 
 	pairX, ok := data["pairx"]
 	pairZ, ok2 := data["pairz"]
@@ -334,26 +338,19 @@ func (c Chest) DecodeNBT(data map[string]any) any {
 
 // EncodeNBT ...
 func (c Chest) EncodeNBT() map[string]any {
+	m := map[string]any{
+		"id": "Chest",
+	}
+	c.WriteLootInfo(m)
 	if c.inventory == nil {
 		facing, customName := c.Facing, c.CustomName
 		//noinspection GoAssignmentToReceiver
 		c = NewChest()
 		c.Facing, c.CustomName = facing, customName
 	}
-	m := map[string]any{
-		"Items": nbtconv.InvToNBT(c.inventory),
-		"id":    "Chest",
-	}
+	m["Items"] = nbtconv.InvToNBT(c.inventory)
 	if c.CustomName != "" {
 		m["CustomName"] = c.CustomName
-	}
-
-	if c.LootTable != "" {
-		m["LootTable"] = c.LootTable
-	}
-
-	if c.LootTableSeed != 0 {
-		m["LootTableSeed"] = int32(c.LootTableSeed)
 	}
 
 	if c.paired {
@@ -371,6 +368,19 @@ func (Chest) EncodeItem() (name string, meta int16) {
 // EncodeBlock ...
 func (c Chest) EncodeBlock() (name string, properties map[string]any) {
 	return "minecraft:chest", map[string]any{"minecraft:cardinal_direction": c.Facing.String()}
+}
+
+// fillLoot fills chests inventory with loot.
+func (c Chest) fillLoot() bool {
+	if c.LootTable == "" {
+		return false
+	}
+	t := loot.NewTable(c.LootTable)
+	err := t.FillInventory(rand.New(rand.NewSource(int64(c.LootTableSeed))), c.inventory)
+	if err != nil {
+		return false
+	}
+	return true
 }
 
 // allChests ...

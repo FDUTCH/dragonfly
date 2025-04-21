@@ -3,6 +3,7 @@ package block
 import (
 	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/block/customblock"
+	"github.com/df-mc/dragonfly/server/internal/nbtconv"
 	"github.com/df-mc/dragonfly/server/item"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/df-mc/dragonfly/server/world/sound"
@@ -350,4 +351,24 @@ func newOreSmeltInfo(product item.Stack, experience float64) item.SmeltInfo {
 // newFuelInfo returns a new FuelInfo with the given values.
 func newFuelInfo(duration time.Duration) item.FuelInfo {
 	return item.FuelInfo{Duration: duration}
+}
+
+type LootInfo struct {
+	LootTable     string
+	LootTableSeed int
+}
+
+func (l *LootInfo) ReadLootInfo(data map[string]any) {
+	l.LootTable = nbtconv.String(data, "LootTable")
+	l.LootTableSeed = int(nbtconv.Int32(data, "LootTableSeed"))
+}
+
+func (l *LootInfo) WriteLootInfo(m map[string]any) {
+	if l.LootTable != "" {
+		m["LootTable"] = l.LootTable
+	}
+
+	if l.LootTableSeed != 0 {
+		m["LootTableSeed"] = int32(l.LootTableSeed)
+	}
 }
