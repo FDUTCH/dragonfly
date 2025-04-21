@@ -37,6 +37,7 @@ type Session struct {
 	ent      *world.EntityHandle
 	conn     Conn
 	handlers map[uint32]packetHandler
+	packets  chan packet.Packet
 
 	currentScoreboard atomic.Pointer[string]
 	currentLines      atomic.Pointer[[]string]
@@ -155,6 +156,7 @@ func (conf Config) New(conn Conn) *Session {
 		openChunkTransactions:  make([]map[uint64]struct{}, 0, 8),
 		closeBackground:        make(chan struct{}),
 		handlers:               map[uint32]packetHandler{},
+		packets:                make(chan packet.Packet, 256),
 		entityRuntimeIDs:       map[*world.EntityHandle]uint64{},
 		entities:               map[uint64]*world.EntityHandle{},
 		hiddenEntities:         map[uuid.UUID]struct{}{},
@@ -181,6 +183,16 @@ func (conf Config) New(conn Conn) *Session {
 	s.sendRecipes()
 	s.sendArmourTrimData()
 	s.SendSpeed(0.1)
+	go func() {
+		for {
+			select {
+			case <-s.closeBackground:
+				return
+			case pk := <-s.packets:
+				_ = conn.WritePacket(pk)
+			}
+		}
+	}()
 	return s
 }
 
@@ -508,7 +520,10 @@ func (s *Session) writePacket(pk packet.Packet) {
 	if s == Nop {
 		return
 	}
-	_ = s.conn.WritePacket(pk)
+	select {
+	case s.packets <- pk:
+	case <-s.closeBackground:
+	}
 }
 
 // actorIdentifier represents the structure of an actor identifier sent over the network.
