@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"net"
-	"slices"
 	"time"
 	_ "unsafe" // Imported for compiler directives.
 
@@ -24,11 +23,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/sandertv/gophertunnel/minecraft/protocol"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
-	"math"
-	"net"
-	"slices"
-	"time"
-	_ "unsafe" // Imported for compiler directives.
 )
 
 // StopShowingEntity stops showing a world.Entity to the Session. It will be completely invisible until a call to
