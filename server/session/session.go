@@ -404,7 +404,7 @@ func (s *Session) sendChunks(tx *world.Tx, c Controllable) {
 	if toLoad > 4 {
 		toLoad = 4
 	}
-	s.chunkLoader.Load(tx, toLoad)
+	go s.chunkLoader.Load(toLoad)
 }
 
 // handleWorldSwitch handles the player of the Session switching worlds.

@@ -87,7 +87,7 @@ func (l *Loader) Move(tx *Tx, pos mgl64.Vec3) {
 // Load loads n chunks around the centre of the chunk, starting with the middle and working outwards. For
 // every chunk loaded, the Viewer passed through construction in New has its ViewChunk method called.
 // Load does nothing for n <= 0.
-func (l *Loader) Load(tx *Tx, n int) {
+func (l *Loader) Load(n int) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -100,10 +100,14 @@ func (l *Loader) Load(tx *Tx, n int) {
 		}
 
 		pos := l.loadQueue[0]
-		c := tx.w.chunk(pos)
+		tr := l.w.manager.request(pos, l.viewer)
+
+		c, err := tr.Chunk()
+		if err != nil {
+			l.w.conf.Log.Error("load chunk: "+err.Error(), "X", pos[0], "Z", pos[1])
+		}
 
 		l.viewer.ViewChunk(pos, l.w.Dimension(), c.BlockEntities, c.Chunk)
-		l.w.addViewer(tx, c, l)
 
 		l.loaded[pos] = c
 

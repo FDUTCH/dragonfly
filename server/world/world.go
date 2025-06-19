@@ -49,6 +49,8 @@ type World struct {
 	// from this map after some time of not being used.
 	chunks map[ChunkPos]*Column
 
+	manager *chunkManager
+
 	// entities holds a map of entities currently loaded and the last ChunkPos
 	// that the Entity was in. These are tracked so that a call to RemoveEntity
 	// can find the correct Entity.
@@ -65,6 +67,8 @@ type World struct {
 
 	viewerMu sync.Mutex
 	viewers  map[*Loader]Viewer
+
+	tx *Tx
 }
 
 // transaction is a type that may be added to the transaction queue of a World.
@@ -166,7 +170,7 @@ func (w *World) blockInChunk(c *Column, pos cube.Pos) Block {
 		// stored NBT yet. We add it here and update the block.
 		nbtB := blockByRuntimeIDOrAir(rid).(NBTer).DecodeNBT(map[string]any{}).(Block)
 		c.BlockEntities[pos] = nbtB
-		for _, v := range c.viewers {
+		for _, v := range c.viewers.Val() {
 			v.ViewBlockUpdate(pos, nbtB, 0)
 		}
 		return nbtB
@@ -273,7 +277,7 @@ func (w *World) setBlock(pos cube.Pos, b Block, opts *SetOpts) {
 		delete(c.BlockEntities, pos)
 	}
 
-	viewers := slices.Clone(c.viewers)
+	viewers := c.viewers.Val()
 
 	if !opts.DisableLiquidDisplacement {
 		var secondLayer Block
@@ -406,7 +410,7 @@ func (w *World) buildStructure(pos cube.Pos, s Structure) {
 
 			// After setting all blocks of the structure within a single chunk,
 			// we show the new chunk to all viewers once.
-			for _, viewer := range c.viewers {
+			for _, viewer := range c.viewers.Val() {
 				viewer.ViewChunk(chunkPos, w.Dimension(), c.BlockEntities, c.Chunk)
 			}
 		}
@@ -469,14 +473,15 @@ func (w *World) setLiquid(pos cube.Pos, b Liquid) {
 		}
 	}
 	rid := BlockRuntimeID(b)
+	viewers := c.viewers.Val()
 	if w.removeLiquids(c, pos) {
 		c.SetBlock(x, y, z, 0, rid)
-		for _, v := range c.viewers {
+		for _, v := range viewers {
 			v.ViewBlockUpdate(pos, b, 0)
 		}
 	} else {
 		c.SetBlock(x, y, z, 1, rid)
-		for _, v := range c.viewers {
+		for _, v := range viewers {
 			v.ViewBlockUpdate(pos, b, 1)
 		}
 	}
@@ -494,14 +499,14 @@ func (w *World) removeLiquids(c *Column, pos cube.Pos) bool {
 	noneLeft := false
 	if noLeft, changed := w.removeLiquidOnLayer(c.Chunk, x, y, z, 0); noLeft {
 		if changed {
-			for _, v := range c.viewers {
+			for _, v := range c.viewers.Val() {
 				v.ViewBlockUpdate(pos, air(), 0)
 			}
 		}
 		noneLeft = true
 	}
 	if _, changed := w.removeLiquidOnLayer(c.Chunk, x, y, z, 1); changed {
-		for _, v := range c.viewers {
+		for _, v := range c.viewers.Val() {
 			v.ViewBlockUpdate(pos, air(), 1)
 		}
 	}
@@ -674,7 +679,7 @@ func (w *World) addEntity(tx *Tx, handle *EntityHandle) Entity {
 	c.Entities, c.modified = append(c.Entities, handle), true
 
 	e := handle.mustEntity(tx)
-	for _, v := range c.viewers {
+	for _, v := range c.viewers.Val() {
 		// Show the entity to all viewers in the chunk of the entity.
 		showEntity(e, v)
 	}
@@ -698,7 +703,7 @@ func (w *World) removeEntity(e Entity, tx *Tx) *EntityHandle {
 	c := w.chunk(pos)
 	c.Entities, c.modified = sliceutil.DeleteVal(c.Entities, handle), true
 
-	for _, v := range c.viewers {
+	for _, v := range c.viewers.Val() {
 		v.HideEntity(e)
 	}
 	delete(w.entities, handle)
@@ -931,7 +936,7 @@ func (w *World) viewersOf(pos mgl64.Vec3) []Viewer {
 	if !ok {
 		return nil
 	}
-	return c.viewers
+	return c.viewers.Val()
 }
 
 // PortalDestination returns the destination World for a portal of a specific
@@ -1053,18 +1058,6 @@ func (w *World) addWorldViewer(l *Loader) {
 	l.viewer.ViewWorldSpawn(w.Spawn())
 }
 
-// addViewer adds a viewer to the World at a given position. Any events that
-// happen in the chunk at that position, such as block and entity changes, will
-// be sent to the viewer.
-func (w *World) addViewer(tx *Tx, c *Column, loader *Loader) {
-	c.viewers = append(c.viewers, loader.viewer)
-	c.loaders = append(c.loaders, loader)
-
-	for _, entity := range c.Entities {
-		showEntity(entity.mustEntity(tx), loader.viewer)
-	}
-}
-
 // removeViewer removes a viewer from a chunk position. All entities will be
 // hidden from the viewer and no more calls will be made when events in the
 // chunk happen.
@@ -1076,10 +1069,7 @@ func (w *World) removeViewer(tx *Tx, pos ChunkPos, loader *Loader) {
 	if !ok {
 		return
 	}
-	if i := slices.Index(c.loaders, loader); i != -1 {
-		c.viewers = slices.Delete(c.viewers, i, i+1)
-		c.loaders = slices.Delete(c.loaders, i, i+1)
-	}
+	c.viewers.Delete(loader.viewer)
 
 	// Hide all entities in the chunk from the viewer.
 	for _, entity := range c.Entities {
@@ -1103,6 +1093,15 @@ func showEntity(e Entity, viewer Viewer) {
 	viewer.ViewEntityArmour(e)
 }
 
+func showEntitiesInChunk(c *Column, tx *Tx) {
+	for _, e := range c.Entities {
+		ent := e.mustEntity(tx)
+		for _, viewer := range c.viewers.Val() {
+			showEntity(ent, viewer)
+		}
+	}
+}
+
 // chunk reads a chunk from the position passed. If a chunk at that position is
 // not yet loaded, the chunk is loaded from the provider, or generated if it
 // did not yet exist. Additionally, chunks newly loaded have the light in them
@@ -1112,13 +1111,19 @@ func (w *World) chunk(pos ChunkPos) *Column {
 	if ok {
 		return c
 	}
-	c, err := w.loadChunk(pos)
-	chunk.LightArea([]*chunk.Chunk{c.Chunk}, int(pos[0]), int(pos[1])).Fill()
+	c, err := w.loadChunk2(pos)
+
+	w.chunks[pos] = c
+	//chunk.LightArea([]*chunk.Chunk{c.Chunk}, int(pos[0]), int(pos[1])).Fill()
 	if err != nil {
 		w.conf.Log.Error("load chunk: "+err.Error(), "X", pos[0], "Z", pos[1])
 		return c
 	}
+
 	w.calculateLight(pos)
+
+	showEntitiesInChunk(c, w.tx)
+
 	return c
 }
 
@@ -1145,6 +1150,18 @@ func (w *World) loadChunk(pos ChunkPos) (*Column, error) {
 	default:
 		return newColumn(chunk.New(airRID, w.Range())), err
 	}
+}
+
+func (w *World) loadChunk2(pos ChunkPos) (*Column, error) {
+	c, err := w.manager.request(pos, nil).Chunk()
+
+	scheduled, savedTick := make([]scheduledTick, 0, len(c.updates)), c.tick
+	for _, t := range c.updates {
+		bl := blockByRuntimeIDOrAir(t.Block)
+		scheduled = append(scheduled, scheduledTick{pos: t.Pos, b: bl, bhash: BlockHash(bl), t: w.scheduledUpdates.currentTick + (t.Tick - savedTick)})
+	}
+	w.scheduledUpdates.add(scheduled)
+	return c, err
 }
 
 // calculateLight calculates the light in the chunk passed and spreads the
@@ -1198,6 +1215,7 @@ func (w *World) autoSave() {
 		select {
 		case <-closeUnused.C:
 			<-w.Exec(w.closeUnusedChunks)
+			w.manager.clear()
 		case <-save.C:
 			w.Save()
 		case <-w.closing:
@@ -1210,7 +1228,7 @@ func (w *World) autoSave() {
 // closeUnusedChunk is called every 5 minutes by autoSave.
 func (w *World) closeUnusedChunks(tx *Tx) {
 	for pos, c := range w.chunks {
-		if len(c.viewers) == 0 {
+		if len(c.viewers.Val()) == 0 {
 			w.closeChunk(tx, pos, c)
 		}
 	}
@@ -1225,8 +1243,9 @@ type Column struct {
 	Entities      []*EntityHandle
 	BlockEntities map[cube.Pos]Block
 
-	viewers []Viewer
-	loaders []*Loader
+	viewers *sliceutil.ThreadSafeSlice[Viewer]
+	updates []chunk.ScheduledBlockUpdate
+	tick    int64
 }
 
 // newColumn returns a new Column wrapper around the chunk.Chunk passed.
@@ -1267,6 +1286,7 @@ func (w *World) columnFrom(c *chunk.Column, _ ChunkPos) *Column {
 		Chunk:         c.Chunk,
 		Entities:      make([]*EntityHandle, 0, len(c.Entities)),
 		BlockEntities: make(map[cube.Pos]Block, len(c.BlockEntities)),
+		viewers:       &sliceutil.ThreadSafeSlice[Viewer]{},
 	}
 	for _, e := range c.Entities {
 		eid, ok := e.Data["identifier"].(string)

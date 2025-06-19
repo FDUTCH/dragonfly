@@ -1,6 +1,9 @@
 package sliceutil
 
-import "slices"
+import (
+	"slices"
+	"sync"
+)
 
 // Convert converts a slice of type B to a slice of type A. Convert panics if B
 // cannot be type asserted to type A.
@@ -46,4 +49,29 @@ func DeleteVal[E any](s []E, v E) []E {
 		}
 	}
 	return s
+}
+
+type ThreadSafeSlice[T comparable] struct {
+	mu    sync.RWMutex
+	slice []T
+}
+
+func (t *ThreadSafeSlice[T]) Append(val T) {
+	t.mu.Lock()
+	t.slice = append(t.slice, val)
+	t.mu.Unlock()
+}
+
+func (t *ThreadSafeSlice[T]) Val() []T {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.slice
+}
+
+func (t *ThreadSafeSlice[T]) Delete(val T) {
+	t.mu.Lock()
+	t.slice = slices.DeleteFunc(t.slice, func(t T) bool {
+		return t == val
+	})
+	t.mu.Unlock()
 }

@@ -96,6 +96,12 @@ func (conf Config) New() *World {
 		ra:               conf.Dim.Range(),
 		set:              s,
 	}
+
+	w.manager = &chunkManager{
+		queue: make(map[ChunkPos]*chunkRequest),
+		cl:    &chunkLoader{w: w},
+	}
+
 	w.weather = weather{w: w}
 	var h Handler = NopHandler{}
 	w.handler.Store(&h)

@@ -207,17 +207,17 @@ func (t ticker) tickEntities(tx *Tx, tick int64) {
 			// the loaders from the old chunk. We can assume they never saw the entity in the first place.
 			if old, ok := tx.World().chunks[lastPos]; ok {
 				old.Entities = sliceutil.DeleteVal(old.Entities, handle)
-				viewers = old.viewers
+				viewers = old.viewers.Val()
 			}
 
 			for _, viewer := range viewers {
-				if slices.Index(c.viewers, viewer) == -1 {
+				if slices.Index(c.viewers.Val(), viewer) == -1 {
 					// First we hide the entity from all loaders that were previously viewing it, but no
 					// longer are.
 					viewer.HideEntity(e)
 				}
 			}
-			for _, viewer := range c.viewers {
+			for _, viewer := range c.viewers.Val() {
 				if slices.Index(viewers, viewer) == -1 {
 					// Then we show the entity to all loaders that are now viewing the entity in the new
 					// chunk.
@@ -226,7 +226,7 @@ func (t ticker) tickEntities(tx *Tx, tick int64) {
 			}
 		}
 
-		if len(c.viewers) > 0 {
+		if len(c.viewers.Val()) > 0 {
 			if te, ok := e.(TickerEntity); ok {
 				te.Tick(tx, tick)
 			}
