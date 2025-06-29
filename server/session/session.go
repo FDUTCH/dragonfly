@@ -142,7 +142,7 @@ type Config struct {
 
 	JoinMessage, QuitMessage chat.Translation
 
-	CreativeGroups []creative.Group
+	CreativeItems []creative.Item
 
 	HandleStop func(*world.Tx, Controllable)
 }
@@ -188,8 +188,7 @@ func (conf Config) New(conn Conn) *Session {
 	s.currentLines.Store(&scoreboardLines)
 
 	s.registerHandlers()
-	s.sendBiomes()
-	groups, items := creativeContent(conf.CreativeGroups)
+	groups, items := creativeContent(conf.CreativeItems)
 	s.writePacket(&packet.CreativeContent{Groups: groups, Items: items})
 	s.sendRecipes()
 	s.sendArmourTrimData()

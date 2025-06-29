@@ -106,8 +106,8 @@ type Config struct {
 	// may be added to the Server's worlds. If no entity types are registered,
 	// Entities will be set to entity.DefaultRegistry.
 	Entities world.EntityRegistry
-	// CreativeGroups is an item groups that would be shown in creative menu of players.
-	CreativeGroups []creative.Group
+	// CreativeItems is an items that would be shown in creative menu of players.
+	CreativeItems []creative.Item
 }
 
 // New creates a Server using fields of conf. The Server's worlds are created
@@ -261,7 +261,7 @@ func (uc UserConfig) Config(log *slog.Logger) (Config, error) {
 		MaxPlayers:              uc.Players.MaxCount,
 		MaxChunkRadius:          uc.Players.MaximumChunkRadius,
 		DisableResourceBuilding: !uc.Resources.AutoBuildPack,
-		CreativeGroups:          creative.Groups(),
+		CreativeItems:           creative.Items(),
 	}
 	if !uc.Server.DisableJoinQuitMessages {
 		conf.JoinMessage, conf.QuitMessage = chat.MessageJoin, chat.MessageQuit
