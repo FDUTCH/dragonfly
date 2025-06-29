@@ -51,19 +51,13 @@ func RegisterGroup(group Group) {
 
 // Items returns a list with all items that have been registered as a creative item. These items will
 // be accessible by players in-game who have creative mode enabled.
-func Items() (out []Item) {
-	for _, data := range items {
-		if data.GroupIndex >= int32(len(creativeGroups)) {
-			panic(fmt.Errorf("invalid group index %v for item %v", data.GroupIndex, data.Name))
-		}
-		st, ok := itemStackFromEntry(data)
-		if !ok {
-			continue
-		}
-		out = append(out, Item{st, creativeGroups[data.GroupIndex].Name})
-	}
+func Items() []Item {
+	return creativeItemStacks
+}
 
-	return out
+// RegisterItem registers an item as a creative item, exposing it in the creative inventory.
+func RegisterItem(item Item) {
+	creativeItemStacks = append(creativeItemStacks, item)
 }
 
 var (
@@ -73,8 +67,9 @@ var (
 	// creativeGroups holds a list of all groups that were registered to the creative inventory using
 	// RegisterGroup.
 	creativeGroups []Group
-	// items holds a list of all item stacks that were registered to the creative inventory.
-	items []creativeItemEntry
+	// creativeItemStacks holds a list of all item stacks that were registered to the creative inventory using
+	// RegisterItem.
+	creativeItemStacks []Item
 )
 
 // creativeGroupEntry holds data of a creative group as present in the creative inventory.
@@ -106,7 +101,6 @@ func registerCreativeItems() {
 	if err := nbt.Unmarshal(creativeItemData, &m); err != nil {
 		panic(err)
 	}
-	items = m.Items
 	for i, group := range m.Groups {
 		name := group.Name
 		if name == "" {
@@ -115,6 +109,16 @@ func registerCreativeItems() {
 		st, _ := itemStackFromEntry(group.Icon)
 		c := Category{category(group.Category)}
 		RegisterGroup(Group{Category: c, Name: name, Icon: st})
+	}
+	for _, data := range m.Items {
+		if data.GroupIndex >= int32(len(creativeGroups)) {
+			panic(fmt.Errorf("invalid group index %v for item %v", data.GroupIndex, data.Name))
+		}
+		st, ok := itemStackFromEntry(data)
+		if !ok {
+			continue
+		}
+		RegisterItem(Item{st, creativeGroups[data.GroupIndex].Name})
 	}
 }
 
