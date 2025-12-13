@@ -2,6 +2,11 @@ package block
 
 import (
 	"fmt"
+	"math/rand/v2"
+	"strings"
+	"sync"
+	"sync/atomic"
+
 	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/block/model"
 	"github.com/df-mc/dragonfly/server/internal/nbtconv"
@@ -10,10 +15,6 @@ import (
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/df-mc/dragonfly/server/world/sound"
 	"github.com/go-gl/mathgl/mgl64"
-	"math/rand/v2"
-	"strings"
-	"sync"
-	"sync/atomic"
 )
 
 const (
@@ -184,7 +185,11 @@ func (s ShulkerBox) ScheduledTick(pos cube.Pos, tx *world.Tx, _ *rand.Rand) {
 
 // BreakInfo ...
 func (s ShulkerBox) BreakInfo() BreakInfo {
-	return newBreakInfo(2, alwaysHarvestable, pickaxeEffective, oneOf(s))
+	return newBreakInfo(2, alwaysHarvestable, pickaxeEffective, simpleDrops()).withBreakHandler(func(pos cube.Pos, tx *world.Tx, u item.User) {
+		if !(u != nil && s.inventory.Empty()) {
+			dropItem(tx, item.NewStack(s, 1), pos.Vec3Centre())
+		}
+	})
 }
 
 // MaxCount always returns 1.
@@ -235,10 +240,10 @@ func (s ShulkerBox) EncodeNBT() map[string]any {
 	return m
 }
 
-// allShulkerBoxes ...e
-func allShulkerBoxes() (shulkerboxes []world.Block) {
+// allShulkerBoxes ...
+func allShulkerBoxes() (shulkerBoxes []world.Block) {
 	for _, t := range ShulkerBoxTypes() {
-		shulkerboxes = append(shulkerboxes, ShulkerBox{Type: t})
+		shulkerBoxes = append(shulkerBoxes, ShulkerBox{Type: t})
 	}
 
 	return
