@@ -50,7 +50,7 @@ type EntityHandle struct {
 	cond         *sync.Cond
 	worldless    *atomic.Bool
 	weakTxActive bool
-	w            *World
+	e            *Executor
 
 	data EntityData
 

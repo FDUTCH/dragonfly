@@ -3,7 +3,6 @@ package world
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"iter"
 	"maps"
 	"math/rand/v2"
@@ -48,10 +47,6 @@ type World struct {
 	closing chan struct{}
 	running sync.WaitGroup
 
-	// chunks holds a cache of chunks currently loaded. These chunks are cleared
-	// from this map after some time of not being used.
-	chunks map[ChunkPos]*Column
-
 	// entities holds a map of entities currently loaded and the last ChunkPos
 	// that the Entity was in. These are tracked so that a call to RemoveEntity
 	// can find the correct Entity.
@@ -59,11 +54,6 @@ type World struct {
 
 	r *rand.Rand
 
-	// scheduledUpdates is a map of tick time values indexed by the block
-	// position at which an update is scheduled. If the current tick exceeds the
-	// tick value passed, the block update will be performed and the entry will
-	// be removed from the map.
-	scheduledUpdates *scheduledTickQueue
 	neighbourUpdates []neighbourUpdate
 
 	viewerMu sync.Mutex
@@ -1169,26 +1159,18 @@ func (w *World) chunk(pos ChunkPos) *Column {
 
 // loadChunk attempts to load a chunk from the provider, or generates a chunk
 // if one doesn't currently exist.
-func (w *World) loadChunk(pos ChunkPos) (*Column, error) {
+func (w *World) loadChunk(pos ChunkPos) *chunk.Column {
 	column, err := w.conf.Provider.LoadColumn(pos, w.conf.Dim)
 	switch {
 	case err == nil:
-		col := w.columnFrom(column, pos)
-		w.chunks[pos] = col
-		for _, e := range col.Entities {
-			w.entities[e] = pos
-			e.w = w
-		}
-		return col, nil
+		return column
 	case errors.Is(err, leveldb.ErrNotFound):
-		// The provider doesn't have a chunk saved at this position, so we generate a new one.
-		col := newColumn(chunk.New(airRID, w.Range()))
-		w.chunks[pos] = col
-
-		w.conf.Generator.GenerateChunk(pos, col.Chunk)
-		return col, nil
+		ch := chunk.New(airRID, w.Range())
+		w.conf.Generator.GenerateChunk(pos, ch)
+		return &chunk.Column{Chunk: ch}
 	default:
-		return newColumn(chunk.New(airRID, w.Range())), err
+		w.conf.Log.Error("load chunk: "+err.Error(), "X", pos[0], "Z", pos[1])
+		return &chunk.Column{Chunk: chunk.New(airRID, w.Range())}
 	}
 }
 
@@ -1303,48 +1285,4 @@ func (w *World) columnTo(col *Column, pos ChunkPos) *chunk.Column {
 		c.ScheduledBlocks = append(c.ScheduledBlocks, chunk.ScheduledBlockUpdate{Pos: t.pos, Block: BlockRuntimeID(t.b), Tick: t.t})
 	}
 	return c
-}
-
-// columnFrom converts a chunk.Column to a Column after reading it from a
-// provider.
-func (w *World) columnFrom(c *chunk.Column, _ ChunkPos) *Column {
-	col := &Column{
-		Chunk:         c.Chunk,
-		Entities:      make([]*EntityHandle, 0, len(c.Entities)),
-		BlockEntities: make(map[cube.Pos]Block, len(c.BlockEntities)),
-	}
-	for _, e := range c.Entities {
-		eid, ok := e.Data["identifier"].(string)
-		if !ok {
-			w.conf.Log.Error("read column: entity without identifier field", "ID", e.ID)
-			continue
-		}
-		t, ok := w.conf.Entities.Lookup(eid)
-		if !ok {
-			w.conf.Log.Error("read column: unknown entity type", "ID", e.ID, "type", eid)
-			continue
-		}
-		col.Entities = append(col.Entities, entityFromData(t, e.ID, e.Data))
-	}
-	for _, be := range c.BlockEntities {
-		rid := c.Chunk.Block(uint8(be.Pos[0]), int16(be.Pos[1]), uint8(be.Pos[2]), 0)
-		b, ok := BlockByRuntimeID(rid)
-		if !ok {
-			w.conf.Log.Error("read column: no block with runtime ID", "ID", rid)
-			continue
-		}
-		nb, ok := b.(NBTer)
-		if !ok {
-			w.conf.Log.Error("read column: block with nbt does not implement NBTer", "block", fmt.Sprintf("%#v", b))
-			continue
-		}
-		col.BlockEntities[be.Pos] = nb.DecodeNBT(be.Data).(Block)
-	}
-	scheduled, savedTick := make([]scheduledTick, 0, len(c.ScheduledBlocks)), c.Tick
-	for _, t := range c.ScheduledBlocks {
-		bl := blockByRuntimeIDOrAir(t.Block)
-		scheduled = append(scheduled, scheduledTick{pos: t.Pos, b: bl, bhash: BlockHash(bl), t: w.scheduledUpdates.currentTick + (t.Tick - savedTick)})
-	}
-	w.scheduledUpdates.add(scheduled)
-	return col
 }
