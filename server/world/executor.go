@@ -27,22 +27,22 @@ func (e *Executor) Pos() Zone {
 }
 
 func (e *Executor) Block(pos cube.Pos) Block {
-	withIn := e.posWithin(pos)
-	ch := e.chunk(chunkPosFromPos(withIn))
+	ch := e.chunk(chunkPosFromPos(pos))
 
 }
 
 func (e *Executor) chunk(pos ChunkPos) *Column {
-	ch := e.chunks[pos.X()][pos.Z()]
+	ch := e.chunks[pos.X()%8][pos.Z()%8]
 	if ch != nil {
 		return ch
 	}
-	e.w.loadChunk()
+	col := e.w.loadChunk(pos)
+	e.addChunk(pos, col)
 }
 
 func (e *Executor) addChunk(pos ChunkPos, c *chunk.Column) *Column {
 	column := e.columnFrom(c, pos)
-	e.chunks[pos.X()][pos.Z()] = column
+	e.chunks[pos.X()%8][pos.Z()%8] = column
 	for _, ent := range column.Entities {
 		e.entities[ent] = pos
 		ent.e = e
