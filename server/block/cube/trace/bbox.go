@@ -128,5 +128,5 @@ func vec3OnLineWithZ(a, b mgl64.Vec3, z float64) (mgl64.Vec3, bool) {
 		return mgl64.Vec3{}, false
 	}
 
-	return mgl64.Vec3{a[0] + (b[0]-a[0])*f, a[1] + (b[1]-a[1])*f, z}, false
+	return mgl64.Vec3{a[0] + (b[0]-a[0])*f, a[1] + (b[1]-a[1])*f, z}, true
 }
