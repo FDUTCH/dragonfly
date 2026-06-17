@@ -71,6 +71,9 @@ type Config struct {
 	// If left nil, DefaultBlockRegistry is used. For a non-default registry,
 	// use NewBlockRegistry(), register blocks/states, and call Finalize().
 	Blocks BlockRegistry
+
+	// TransactionBatchSize ...
+	TransactionBatchSize int
 }
 
 // New creates a new World using the Config conf. The World returned will start
@@ -102,6 +105,9 @@ func (conf Config) New() *World {
 	}
 	if conf.Blocks == nil {
 		conf.Blocks = DefaultBlockRegistry
+	}
+	if conf.TransactionBatchSize <= 0 {
+		conf.TransactionBatchSize = 256
 	}
 
 	// Initialize the passed block registry and also initialize the default block registry which

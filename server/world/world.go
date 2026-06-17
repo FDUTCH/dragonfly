@@ -140,6 +140,15 @@ func (w *World) handleTransactions() {
 		select {
 		case tx := <-w.queue:
 			tx.Run(w)
+		batch:
+			for range w.conf.TransactionBatchSize {
+				select {
+				case next := <-w.queue:
+					next.Run(w)
+				default:
+					break batch
+				}
+			}
 		case <-w.queueClosing:
 			w.queueing.Done()
 			return
