@@ -1,6 +1,8 @@
 package playerdb
 
 import (
+	"time"
+
 	"github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/item"
 	"github.com/df-mc/dragonfly/server/item/inventory"
@@ -8,11 +10,10 @@ import (
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/go-gl/mathgl/mgl64"
 	"github.com/google/uuid"
-	"time"
 )
 
 func (p *Provider) fromJson(d jsonData, lookupWorld func(world.Dimension) *world.World) (player.Config, *world.World) {
-	dim, _ := world.DimensionByID(int(d.Dimension))
+	dim, _ := world.DimensionByName(d.Dimension)
 	mode, _ := world.GameModeByID(int(d.GameMode))
 	conf := player.Config{
 		UUID:                uuid.MustParse(d.UUID),
@@ -58,7 +59,6 @@ func (p *Provider) fromJson(d jsonData, lookupWorld func(world.Dimension) *world
 }
 
 func (p *Provider) toJson(d player.Config, w *world.World) jsonData {
-	dim, _ := world.DimensionID(w.Dimension())
 	mode, _ := world.GameModeID(d.GameMode)
 	offHand, _ := d.OffHand.Item(0)
 	return jsonData{
@@ -92,7 +92,7 @@ func (p *Provider) toJson(d player.Config, w *world.World) jsonData {
 			MainHandSlot: uint32(d.HeldSlot),
 		}),
 		EnderChestInventory: encodeItems(d.EnderChestInventory.Slots()),
-		Dimension:           uint8(dim),
+		Dimension:           w.Dimension().String(),
 	}
 }
 
@@ -115,7 +115,7 @@ type jsonData struct {
 	Effects                          []jsonEffect
 	FireTicks                        int64
 	FallDistance                     float64
-	Dimension                        uint8
+	Dimension                        string
 }
 
 type jsonInventoryData struct {

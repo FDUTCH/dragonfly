@@ -39,19 +39,28 @@ func DimensionID(dim Dimension) (int, bool) {
 	return dimensionReg.LookupID(dim)
 }
 
+// DimensionByName returns dimension by its name.
+func DimensionByName(name string) (Dimension, bool) {
+	return dimensionReg.GetByName(name)
+}
+
 type dimensionRegistry struct {
 	dimensions map[int]Dimension
 	ids        map[Dimension]int
-	custom     []Dimension
+
+	names  map[string]Dimension
+	custom []Dimension
 }
 
 // newDimensionRegistry returns an initialised dimensionRegistry.
 func newDimensionRegistry(dim map[int]Dimension) *dimensionRegistry {
 	ids := make(map[Dimension]int, len(dim))
+	names := make(map[string]Dimension, len(dim))
 	for k, v := range dim {
 		ids[v] = k
+		names[v.String()] = v
 	}
-	return &dimensionRegistry{dimensions: dim, ids: ids}
+	return &dimensionRegistry{dimensions: dim, ids: ids, names: names}
 }
 
 // Lookup looks up a Dimension for the ID passed, returning Overworld for 0,
@@ -72,12 +81,19 @@ func (reg *dimensionRegistry) LookupID(dim Dimension) (int, bool) {
 	return id, ok
 }
 
+// GetByName returns Dimension by its name.
+func (reg *dimensionRegistry) GetByName(name string) (Dimension, bool) {
+	dim, ok := reg.names[name]
+	return dim, ok
+}
+
 // RegisterDimension registers dimension.
 func (reg *dimensionRegistry) RegisterDimension(dim Dimension) {
 	reg.custom = append(reg.custom, dim)
 	id := 1000 + len(reg.custom)
 	reg.dimensions[id] = dim
 	reg.ids[dim] = id
+	reg.names[dim.String()] = dim
 }
 
 // RegisterDimension registers custom dimension.
